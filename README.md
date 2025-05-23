@@ -51,6 +51,20 @@
       font-weight: 600;
     }
     
+    .account-selector {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .account-info {
+      background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #1976d2;
+      margin-bottom: 15px;
+    }
+    
     .field {
       margin: 15px 0;
       background: linear-gradient(145deg, #f8f9fa, #e9ecef);
@@ -96,6 +110,10 @@
       opacity: 1;
     }
     
+    .hidden {
+      display: none;
+    }
+    
     .btn {
       background: linear-gradient(145deg, #3399ff, #2d7dd8);
       color: white;
@@ -136,6 +154,17 @@
       left: 100%;
     }
     
+    .btn.disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .btn.disabled:hover {
+      transform: none;
+      box-shadow: none;
+    }
+    
     .notification {
       position: fixed;
       top: 20px;
@@ -148,10 +177,15 @@
       transform: translateX(400px);
       transition: transform 0.3s ease;
       z-index: 1000;
+      max-width: 300px;
     }
     
     .notification.show {
       transform: translateX(0);
+    }
+    
+    .notification.error {
+      background: #dc3545;
     }
     
     .modal {
@@ -257,6 +291,22 @@
       box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
     }
     
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
     @media (max-width: 480px) {
       .container {
         margin: 10px;
@@ -278,41 +328,39 @@
   <div class="container">
     <h2>💼 Thông Tin Tài Khoản</h2>
     
-    <div class="field" onclick="copyToClipboard('user123456', this)">
+    <div class="account-info">
+      <span id="accountCounter">Chưa có tài khoản nào</span>
+    </div>
+    
+    <div class="field" onclick="copyToClipboard(getCurrentUsername(), this)">
       <div class="field-label">Tên đăng nhập</div>
-      <div class="field-value">user123456</div>
+      <div class="field-value" id="usernameValue">Chưa có tài khoản</div>
       <div class="copy-indicator">Nhấp để sao chép</div>
     </div>
     
-    <div class="field" onclick="copyToClipboard('passABC@123', this)">
+    <div class="field" onclick="copyToClipboard(getCurrentPassword(), this)">
       <div class="field-label">Mật khẩu</div>
-      <div class="field-value">••••••••••</div>
+      <div class="field-value" id="passwordValue">••••••••••</div>
       <div class="copy-indicator">Nhấp để sao chép</div>
     </div>
     
-    <div class="field" onclick="copyToClipboard('email@example.com', this)">
+    <div class="field" onclick="copyToClipboard(getCurrentEmail(), this)">
       <div class="field-label">Email</div>
-      <div class="field-value">email@example.com</div>
+      <div class="field-value" id="emailValue">Chưa có tài khoản</div>
       <div class="copy-indicator">Nhấp để sao chép</div>
     </div>
     
-    <div class="field" onclick="copyToClipboard('emailpass123', this)">
-      <div class="field-label">Mật khẩu Email</div>
-      <div class="field-value">••••••••••</div>
-      <div class="copy-indicator">Nhấp để sao chép</div>
-    </div>
-    
-    <div class="field" onclick="copyToClipboard('ABC123XYZ', this)">
+    <div class="field hidden" id="codeField" onclick="copyToClipboard(getCurrentCode(), this)">
       <div class="field-label">Mã Code Gmail</div>
-      <div class="field-value">ABC123XYZ</div>
+      <div class="field-value" id="codeValue">Chưa có mã</div>
       <div class="copy-indicator">Nhấp để sao chép</div>
     </div>
     
-    <button class="btn" onclick="getCode()">
+    <button class="btn" id="getCodeBtn" onclick="getCode()">
       🔑 Lấy Mã
     </button>
     
-    <button class="btn" onclick="refreshAccount()">
+    <button class="btn" id="refreshBtn" onclick="refreshAccount()">
       📥 Làm Mới Tài Khoản
     </button>
     
@@ -331,7 +379,7 @@
       
       <div class="input-group">
         <label for="rawAccountData">📋 Dán thông tin tài khoản (định dạng: user|pass|email|emailpass|code):</label>
-        <textarea id="rawAccountData" placeholder="Ví dụ: user123|password123|email@domain.com|emailpass|code123abc..." style="height: 80px;"></textarea>
+        <textarea id="rawAccountData" placeholder="Ví dụ: user123|password123|email@domain.com|emailpass|code123abc..."></textarea>
         <button type="button" class="modal-btn" onclick="parseAccountData()" style="margin-top: 10px; width: 100%;">
           🔄 Tự Động Phân Tích
         </button>
@@ -374,7 +422,75 @@
   </div>
 
   <script>
+    // Lưu trữ tài khoản
+    let accounts = [];
+    let currentAccountIndex = 0;
+    
+    // Khởi tạo
+    function init() {
+      updateAccountDisplay();
+      updateButtons();
+    }
+    
+    function updateAccountDisplay() {
+      const counter = document.getElementById('accountCounter');
+      const usernameValue = document.getElementById('usernameValue');
+      const passwordValue = document.getElementById('passwordValue');
+      const emailValue = document.getElementById('emailValue');
+      
+      if (accounts.length === 0) {
+        counter.textContent = 'Chưa có tài khoản nào';
+        usernameValue.textContent = 'Chưa có tài khoản';
+        passwordValue.textContent = '••••••••••';
+        emailValue.textContent = 'Chưa có tài khoản';
+      } else {
+        counter.textContent = `Tài khoản ${currentAccountIndex + 1}/${accounts.length}`;
+        const current = accounts[currentAccountIndex];
+        usernameValue.textContent = current.username;
+        passwordValue.textContent = '••••••••••';
+        emailValue.textContent = current.email;
+      }
+    }
+    
+    function updateButtons() {
+      const getCodeBtn = document.getElementById('getCodeBtn');
+      const refreshBtn = document.getElementById('refreshBtn');
+      
+      if (accounts.length === 0) {
+        getCodeBtn.classList.add('disabled');
+        refreshBtn.classList.add('disabled');
+        getCodeBtn.textContent = '🔑 Lấy Mã (Cần thêm tài khoản)';
+        refreshBtn.textContent = '📥 Làm Mới (Cần thêm tài khoản)';
+      } else {
+        getCodeBtn.classList.remove('disabled');
+        refreshBtn.classList.remove('disabled');
+        getCodeBtn.textContent = '🔑 Lấy Mã';
+        refreshBtn.textContent = '📥 Làm Mới Tài Khoản';
+      }
+    }
+    
+    function getCurrentUsername() {
+      return accounts.length > 0 ? accounts[currentAccountIndex].username : 'Chưa có tài khoản';
+    }
+    
+    function getCurrentPassword() {
+      return accounts.length > 0 ? accounts[currentAccountIndex].password : '';
+    }
+    
+    function getCurrentEmail() {
+      return accounts.length > 0 ? accounts[currentAccountIndex].email : 'Chưa có tài khoản';
+    }
+    
+    function getCurrentCode() {
+      return accounts.length > 0 ? accounts[currentAccountIndex].currentCode || 'Chưa có mã' : 'Chưa có mã';
+    }
+    
     function copyToClipboard(text, element) {
+      if (!text || text === 'Chưa có tài khoản' || text === 'Chưa có mã') {
+        showNotification('Không có dữ liệu để sao chép!', 'error');
+        return;
+      }
+      
       // Tạo element tạm thời để copy
       const tempInput = document.createElement('input');
       tempInput.value = text;
@@ -384,7 +500,7 @@
       document.body.removeChild(tempInput);
       
       // Hiển thị thông báo
-      showNotification('Đã sao chép: ' + text);
+      showNotification('Đã sao chép: ' + (text.length > 50 ? text.substring(0, 50) + '...' : text));
       
       // Hiệu ứng visual
       element.style.background = 'linear-gradient(145deg, #d4edda, #c3e6cb)';
@@ -393,35 +509,85 @@
       }, 300);
     }
     
-    function showNotification(message) {
+    function showNotification(message, type = 'success') {
       const notification = document.getElementById('notification');
       notification.textContent = message;
-      notification.classList.add('show');
+      notification.className = 'notification show';
+      if (type === 'error') {
+        notification.classList.add('error');
+      }
       
       setTimeout(() => {
         notification.classList.remove('show');
+        setTimeout(() => notification.className = 'notification', 300);
       }, 3000);
     }
     
-    function getCode() {
-      const codes = ['XYZ789', 'ABC123', 'DEF456', 'GHI789', 'JKL012'];
-      const randomCode = codes[Math.floor(Math.random() * codes.length)];
-      showNotification('Mã được lấy: ' + randomCode);
+    async function getCode() {
+      if (accounts.length === 0) {
+        showNotification('Vui lòng thêm tài khoản trước!', 'error');
+        return;
+      }
       
-      // Cập nhật mã trong giao diện
-      setTimeout(() => {
-        const codeField = document.querySelectorAll('.field-value')[4]; // Index 4 vì giờ có 5 trường
-        codeField.textContent = randomCode;
-      }, 1000);
+      const btn = document.getElementById('getCodeBtn');
+      const originalText = btn.innerHTML;
+      
+      btn.innerHTML = '<div class="loading"></div>Đang lấy mã...';
+      btn.classList.add('disabled');
+      
+      try {
+        // Giả lập quá trình đọc Gmail
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Tạo mã giả lập (trong thực tế sẽ đọc từ Gmail)
+        const codes = [
+          'ABC123XYZ789',
+          'DEF456GHI012',
+          'JKL345MNO678',
+          'PQR901STU234',
+          'VWX567YZA890'
+        ];
+        const randomCode = codes[Math.floor(Math.random() * codes.length)];
+        
+        // Cập nhật mã cho tài khoản hiện tại
+        accounts[currentAccountIndex].currentCode = randomCode;
+        
+        // Hiển thị trường mã
+        const codeField = document.getElementById('codeField');
+        const codeValue = document.getElementById('codeValue');
+        codeField.classList.remove('hidden');
+        codeValue.textContent = randomCode;
+        
+        showNotification('✅ Đã lấy mã thành công: ' + randomCode);
+        
+      } catch (error) {
+        showNotification('❌ Lỗi khi lấy mã: ' + error.message, 'error');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.classList.remove('disabled');
+      }
     }
     
     function refreshAccount() {
-      showNotification('Đang làm mới tài khoản...');
+      if (accounts.length === 0) {
+        showNotification('Không có tài khoản để làm mới!', 'error');
+        return;
+      }
       
-      // Giả lập quá trình làm mới
-      setTimeout(() => {
-        showNotification('Tài khoản đã được làm mới thành công!');
-      }, 2000);
+      if (accounts.length === 1) {
+        showNotification('Chỉ có 1 tài khoản, không thể chuyển đổi!', 'error');
+        return;
+      }
+      
+      // Chuyển sang tài khoản tiếp theo
+      currentAccountIndex = (currentAccountIndex + 1) % accounts.length;
+      
+      // Ẩn trường mã code khi chuyển tài khoản
+      const codeField = document.getElementById('codeField');
+      codeField.classList.add('hidden');
+      
+      updateAccountDisplay();
+      showNotification(`✅ Đã chuyển sang tài khoản ${currentAccountIndex + 1}/${accounts.length}`);
     }
     
     function showAddAccount() {
@@ -432,7 +598,7 @@
       const rawData = document.getElementById('rawAccountData').value.trim();
       
       if (!rawData) {
-        showNotification('Vui lòng dán thông tin tài khoản!');
+        showNotification('Vui lòng dán thông tin tài khoản!', 'error');
         return;
       }
       
@@ -440,7 +606,7 @@
       const parts = rawData.split('|');
       
       if (parts.length < 5) {
-        showNotification('Định dạng không đúng! Cần có ít nhất 5 phần: user|pass|email|emailpass|code');
+        showNotification('Định dạng không đúng! Cần có ít nhất 5 phần: user|pass|email|emailpass|code', 'error');
         return;
       }
       
@@ -452,7 +618,6 @@
       
       // Phần code có thể là phần cuối cùng (có thể rất dài)
       if (parts.length > 4) {
-        // Nối tất cả các phần còn lại thành code (trong trường hợp code chứa dấu |)
         const codeData = parts.slice(4).join('|');
         document.getElementById('newCode').value = codeData;
       }
@@ -472,35 +637,45 @@
     }
     
     function addAccount() {
-      const username = document.getElementById('newUsername').value;
-      const password = document.getElementById('newPassword').value;
-      const email = document.getElementById('newEmail').value;
-      const emailPassword = document.getElementById('newEmailPassword').value;
-      const code = document.getElementById('newCode').value;
+      const username = document.getElementById('newUsername').value.trim();
+      const password = document.getElementById('newPassword').value.trim();
+      const email = document.getElementById('newEmail').value.trim();
+      const emailPassword = document.getElementById('newEmailPassword').value.trim();
+      const code = document.getElementById('newCode').value.trim();
       
       if (!username || !password || !email || !emailPassword || !code) {
-        showNotification('Vui lòng điền đầy đủ thông tin!');
+        showNotification('Vui lòng điền đầy đủ thông tin!', 'error');
         return;
       }
       
-      // Cập nhật thông tin tài khoản hiện tại
-      const fields = document.querySelectorAll('.field-value');
-      fields[0].textContent = username;
-      fields[1].textContent = '••••••••••'; // Ẩn mật khẩu
-      fields[2].textContent = email;
-      fields[3].textContent = '••••••••••'; // Ẩn mật khẩu email
-      fields[4].textContent = code.length > 50 ? code.substring(0, 50) + '...' : code; // Hiển thị code rút gọn nếu quá dài
+      // Kiểm tra email trùng lặp
+      const existingAccount = accounts.find(acc => acc.email === email);
+      if (existingAccount) {
+        showNotification('Email này đã tồn tại!', 'error');
+        return;
+      }
       
-      // Cập nhật dữ liệu để copy
-      const fieldElements = document.querySelectorAll('.field');
-      fieldElements[0].setAttribute('onclick', `copyToClipboard('${username}', this)`);
-      fieldElements[1].setAttribute('onclick', `copyToClipboard('${password}', this)`);
-      fieldElements[2].setAttribute('onclick', `copyToClipboard('${email}', this)`);
-      fieldElements[3].setAttribute('onclick', `copyToClipboard('${emailPassword}', this)`);
-      fieldElements[4].setAttribute('onclick', `copyToClipboard('${code}', this)`);
+      // Thêm tài khoản mới
+      const newAccount = {
+        username: username,
+        password: password,
+        email: email,
+        emailPassword: emailPassword,
+        code: code,
+        currentCode: null
+      };
       
+      accounts.push(newAccount);
+      
+      // Nếu đây là tài khoản đầu tiên, đặt làm tài khoản hiện tại
+      if (accounts.length === 1) {
+        currentAccountIndex = 0;
+      }
+      
+      updateAccountDisplay();
+      updateButtons();
       closeModal();
-      showNotification('✅ Tài khoản đã được thêm thành công!');
+      showNotification(`✅ Đã thêm tài khoản thành công! Tổng cộng: ${accounts.length} tài khoản`);
     }
     
     // Đóng modal khi click bên ngoài
@@ -511,10 +686,11 @@
       }
     }
     
-    // Hiệu ứng load trang
+    // Khởi tạo khi trang load
     window.addEventListener('load', () => {
+      init();
       setTimeout(() => {
-        showNotification('Chào mừng! Trang đã sẵn sàng sử dụng.');
+        showNotification('✅ Trang đã sẵn sàng sử dụng!');
       }, 500);
     });
   </script>
